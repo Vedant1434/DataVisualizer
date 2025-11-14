@@ -2,77 +2,272 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSV Data Viewer</title>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 1rem; background-color: #f9f9f9; }
-        h2 { border-bottom: 2px solid #eee; padding-bottom: 0.5rem; }
-        .error { color: #D8000C; background-color: #FFD2D2; border: 1px solid #D8000C; padding: 1rem; border-radius: 4px; margin: 1rem 0; }
-        .info { background-color: #e6f7ff; border: 1px solid #b3e0ff; padding: 1rem; border-radius: 4px; margin: 1rem 0; }
-        .info code { background: #d1ecff; padding: 2px 4px; border-radius: 3px; }
-        .filter-form { display: flex; gap: 10px; margin: 1rem 0; align-items: center; }
-        .filter-form input[type="text"] { flex-grow: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
-        .filter-form button, .export-btn { padding: 0.5rem 1rem; background-color: #007bff; color: white; text-decoration: none; border: none; border-radius: 4px; cursor: pointer; }
-        .export-btn { background-color: #28a745; }
-        .table-container { width: 100%; overflow-x: auto; border: 1px solid #ddd; background: #fff; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.5rem; border: 1px solid #ddd; text-align: left; white-space: nowrap; }
-        th { background-color: #f4f4f4; }
-        .pagination { margin-top: 1rem; }
-        .pagination a { margin: 0 2px; padding: 5px 10px; text-decoration: none; border: 1px solid #ddd; color: #007bff; }
-        .pagination strong { margin: 0 2px; padding: 5px 10px; border: 1px solid #007bff; background: #007bff; color: white; }
+        :root {
+            --color-bg: #f8f9fa;
+            --color-bg-alt: #ffffff;
+            --color-border: #dee2e6;
+            --color-text: #212529;
+            --color-text-muted: #6c757d;
+            --color-primary: #007bff;
+            --color-primary-hover: #0069d9;
+            --color-success: #28a745;
+            --color-danger: #dc3545;
+            --color-danger-bg: #f8d7da;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: var(--font-family);
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar (Filter Panel) */
+        .sidebar {
+            flex: 0 0 320px;
+            background: var(--color-bg-alt);
+            border-right: 1px solid var(--color-border);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
+        }
+        .sidebar-header h2 { margin: 0; }
+        .sidebar-body {
+            padding: 1rem;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .sidebar-footer {
+            padding: 1rem;
+            border-top: 1px solid var(--color-border);
+            flex-shrink: 0;
+            background: #fdfdfd;
+        }
+
+        /* Main Content (Table) */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .main-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--color-bg-alt);
+        }
+        .table-container {
+            flex-grow: 1;
+            overflow: auto; /* Allows table to scroll horizontally and vertically */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--color-bg-alt);
+        }
+        th, td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--color-border);
+            text-align: left;
+            white-space: nowrap;
+        }
+        th {
+            background-color: #f1f3f5;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        tbody tr:hover { background-color: #f8f9fa; }
+
+        /* Pagination */
+        .pagination {
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--color-border);
+            background: var(--color-bg-alt);
+            flex-shrink: 0;
+        }
+        .pagination-nav a, .pagination-nav strong {
+            margin: 0 2px;
+            padding: 5px 12px;
+            text-decoration: none;
+            border: 1px solid var(--color-border);
+            color: var(--color-primary);
+            border-radius: 4px;
+        }
+        .pagination-nav strong {
+            background: var(--color-primary);
+            color: white;
+            border-color: var(--color-primary);
+        }
+        .pagination-nav a:hover { background-color: #e9ecef; }
+        .pagination-info { color: var(--color-text-muted); }
+
+        /* Form Elements */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+        .form-control, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+        }
+        textarea { resize: vertical; min-height: 80px; }
+        .btn {
+            padding: 0.6rem 1.2rem;
+            background-color: var(--color-primary);
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            display: inline-block;
+            text-align: center;
+        }
+        .btn:hover { background-color: var(--color-primary-hover); }
+        .btn-success { background-color: var(--color-success); }
+        .btn-success:hover { background-color: #218838; }
+        .btn-full { width: 100%; }
+
+        /* Column Selector */
+        .column-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: 0.5rem;
+            background: #fdfdfd;
+        }
+        .column-list div {
+            display: flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+        }
+        .column-list label {
+            font-weight: normal;
+            margin-left: 0.5rem;
+            cursor: pointer;
+        }
+
+        /* Error Message */
+        .error {
+            color: var(--color-danger);
+            background-color: var(--color-danger-bg);
+            border: 1px solid var(--color-danger);
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem;
+        }
     </style>
 </head>
 <body>
-<h2>CSV Data Viewer</h2>
 
-<div th:if="${error}" class="error" th:text="${error}"></div>
+<aside class="sidebar">
+    <form th:action="@{/view}" method="get">
+        <div class="sidebar-header">
+            <h2>Filter Data</h2>
+        </div>
 
-<div class="info">
-    <strong>Available columns:</strong>
-    <span th:each="col : ${columnNames}">
-            <code th:text="${col}"></code>
-        </span>
-</div>
+        <div class="sidebar-body">
+            <div class="form-group">
+                <label for="filter">Filter Rule</label>
+                <textarea id="filter" name="filter" class="form-control"
+                          placeholder="e.g. price > 100 AND status == &quot;active&quot;"
+                          th:text="${currentFilter}"></textarea>
+            </div>
 
-<form th:action="@{/view}" method="get" class="filter-form">
-    <input type="text" name="filter" placeholder="Enter filter rule... e.g. price > 100 AND status == 'active'" th:value="${currentFilter}">
-    <button type="submit">Filter</button>
-    <a th:href="@{/export(filter=${currentFilter})}" class="export-btn">Export Filtered CSV</a>
-</form>
+            <div class="form-group">
+                <label>Select Columns</label>
+                <div class="column-list">
+                    <div th:each="col : ${allHeaders}">
+                        <input type="checkbox" name="cols" th:value="${col}" th:id="${'col-' + col}"
+                               th:checked="${selectedHeaders.contains(col)}">
+                        <label th:for="${'col-' + col}" th:text="${col}"></label>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-<div class="table-container">
-    <table>
-        <thead>
-        <tr>
-            <th th:each="header : ${headers}" th:text="${header}"></th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:if="${page.empty}">
-            <td th:colspan="${#lists.size(headers)}">No data found.</td>
-        </tr>
-        <tr th:each="row : ${page.content}">
-            <td th:each="header : ${headers}" th:text="${row.get(header)}"></td>
-        </tr>
-        </tbody>
-    </table>
-</div>
+        <div class="sidebar-footer">
+            <button type="submit" class="btn btn-full">Apply Filter</button>
+        </div>
+    </form>
+</aside>
 
-<div th:if="${page.totalPages > 1}" class="pagination">
-        <span th:if="${page.hasPrevious()}">
-            <a th:href="@{/view(filter=${currentFilter}, page=${page.number - 1}, size=${page.size})}">Previous</a>
-        </span>
+<main class="main-content">
 
-    <strong>Page <span th:text="${page.number + 1}"></span> of <span th:text="${page.totalPages}"></span></strong>
+    <div class="main-header">
+        <div>
+            <strong><span th:text="${page.totalElements}"></span></strong>
+            <span th:text="${page.totalElements == 1 ? 'row' : 'rows'}"></span>
+            (Page <span th:text="${page.number + 1}"></span> of <span th:text="${page.totalPages}"></span>)
+        </div>
+        <div>
+            <a th:href="@{/export(filter=${currentFilter})}" class="btn btn-success">Export</a>
+            <a th:href="@{/new}" class="btn" style="background-color: #6c757d; margin-left: 0.5rem;">New File</a>
+        </div>
+    </div>
 
-    <span th:if="${page.hasNext()}">
-            <a th:href="@{/view(filter=${currentFilter}, page=${page.number + 1}, size=${page.size})}">Next</a>
-        </span>
+    <div th:if="${error}" class="error" th:text="${error}"></div>
 
-    <div>Total Rows (Filtered): <span th:text="${page.totalElements}"></span></div>
-</div>
+    <div class="table-container">
+        <table>
+            <thead>
+            <tr>
+                <th th:each="header : ${selectedHeaders}" th:text="${header}"></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${page.empty}">
+                <td th:colspan="${#lists.size(selectedHeaders)}" style="text-align: center; padding: 2rem;">
+                    No data found matching your filter.
+                </td>
+            </tr>
+            <tr th:each="row : ${page.content}">
+                <td th:each="header : ${selectedHeaders}" th:text="${row.get(header)}"></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
 
-<a th:href="@{/}" style="display:inline-block; margin-top: 1rem;">Upload new file</a>
+    <div th:if="${page.totalPages > 1}" class="pagination">
+        <div class="pagination-info">
+            Rows per page: <strong th:text="${page.size}"></strong>
+        </div>
+        <div class="pagination-nav">
+                <span th:if="${page.hasPrevious()}">
+                    <a th:href="@{/view(filter=${currentFilter}, page=${page.number - 1}, size=${page.size}, cols=${selectedHeaders})}">Previous</a>
+                </span>
+
+            <strong><span th:text="${page.number + 1}"></span> / <span th:text="${page.totalPages}"></span></strong>
+
+            <span th:if="${page.hasNext()}">
+                    <a th:href="@{/view(filter=${currentFilter}, page=${page.number + 1}, size=${page.size}, cols=${selectedHeaders})}">Next</a>
+                </span>
+        </div>
+    </div>
+</main>
 
 </body>
 </html>

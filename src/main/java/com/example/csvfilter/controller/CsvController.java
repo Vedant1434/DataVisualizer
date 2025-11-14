@@ -14,8 +14,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.bind.support.SessionStatus;
+import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 @Controller
@@ -31,7 +34,13 @@ public class CsvController {
 
     @GetMapping("/")
     public String index() {
+        // Check if session data exists and is valid
         if (userSessionData.hasData()) {
+            // Verify data integrity - if headers or schema are null, clear the data
+            if (userSessionData.getHeaders() == null || userSessionData.getSchema() == null) {
+                userSessionData.clearData();
+                return "index";
+            }
             return "redirect:/view";
         }
         return "index";
@@ -57,15 +66,27 @@ public class CsvController {
             @RequestParam(required = false, defaultValue = "") String filter,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) List<String> cols,
             Model model) {
 
         if (!userSessionData.hasData()) {
             return "redirect:/";
         }
 
-        model.addAttribute("headers", userSessionData.getHeaders());
+        // Additional safety check for data integrity
+        List<String> allHeaders = userSessionData.getHeaders();
+        if (allHeaders == null || userSessionData.getSchema() == null) {
+            userSessionData.clearData();
+            return "redirect:/";
+        }
+        List<String> selectedHeaders = cols;
+        if (selectedHeaders == null || selectedHeaders.isEmpty()) {
+            selectedHeaders = allHeaders;
+        }
+
+        model.addAttribute("allHeaders", allHeaders);
+        model.addAttribute("selectedHeaders", selectedHeaders);
         model.addAttribute("currentFilter", filter);
-        model.addAttribute("columnNames", userSessionData.getColumnNames());
 
         try {
             Pageable pageable = PageRequest.of(page, size);
@@ -73,7 +94,6 @@ public class CsvController {
             model.addAttribute("page", paginatedData);
         } catch (FilterException e) {
             model.addAttribute("error", e.getMessage());
-            // Show empty page on error
             model.addAttribute("page", Page.empty());
         }
 
@@ -87,19 +107,30 @@ public class CsvController {
             RedirectAttributes redirectAttributes) {
 
         if (!userSessionData.hasData()) {
-            // Cannot export, redirect
             return;
         }
 
         try {
             response.setContentType("text/csv");
-            response.setHeader("Content-Disposition", "attachment; file=\"filtered_data.csv\"");
+            response.setHeader("Content-Disposition", "attachment; filename=\"filtered_data.csv\"");
             dataService.exportFilteredData(filter, response.getWriter());
         } catch (FilterException e) {
-            // How to handle error in a download? Redirect with flash attribute.
             redirectAttributes.addFlashAttribute("error", "Export failed: " + e.getMessage());
         } catch (IOException e) {
             // Handle IO exception
         }
+    }
+
+    @GetMapping("/new")
+    public String startNew(SessionStatus sessionStatus, HttpSession session) {
+        // Explicitly clear the session data
+        userSessionData.clearData();
+        // Mark the session as complete, which clears all session-scoped beans
+        sessionStatus.setComplete();
+        // Invalidate the HTTP session to ensure complete cleanup
+        if (session != null) {
+            session.invalidate();
+        }
+        return "redirect:/?cleared=true"; // Redirect to the root upload page with a flag
     }
 }

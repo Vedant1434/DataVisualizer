@@ -39,4 +39,10 @@ public class UserSessionData implements Serializable {
     public boolean hasData() {
         return allRows != null && !allRows.isEmpty();
     }
+
+    public void clearData() {
+        this.allRows = null;
+        this.headers = null;
+        this.schema = null;
+    }
 }

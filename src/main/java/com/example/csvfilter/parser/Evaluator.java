@@ -4,11 +4,11 @@ import com.example.csvfilter.parser.ast.*;
 import com.example.csvfilter.parser.exception.EvaluationException;
 
 import java.util.Map;
-import java.util.Objects;
 
 public class Evaluator implements Expression.Visitor<Object> {
 
-    private final Map<String, Class<?>> schema;
+    @SuppressWarnings("unused")
+    private final Map<String, Class<?>> schema; // Reserved for future type validation
     private Map<String, Object> currentRow;
 
     public Evaluator(Map<String, Class<?>> schema) {
@@ -50,9 +50,9 @@ public class Evaluator implements Expression.Visitor<Object> {
             case CONTAINS: return checkStringOp(left, right, String::contains);
             case STARTS_WITH: return checkStringOp(left, right, String::startsWith);
             case ENDS_WITH: return checkStringOp(left, right, String::endsWith);
+            default:
+                throw new EvaluationException("Unexpected operator: " + expr.operator().type());
         }
-        // Unreachable
-        return null;
     }
 
     @Override
@@ -75,31 +75,40 @@ public class Evaluator implements Expression.Visitor<Object> {
     private boolean isTruthy(Object object) {
         if (object == null) return false;
         if (object instanceof Boolean) return (boolean) object;
-        // All other values (Numbers, Strings) are "truthy" if they exist.
         return true;
     }
 
     private boolean isEqual(Object a, Object b) {
         if (a == null && b == null) return true;
-        if (a == null) return false;
+        if (a == null || b == null) return false;
+
         // Coerce types for comparison
         if (a instanceof Number && b instanceof Number) {
             return ((Number) a).doubleValue() == ((Number) b).doubleValue();
         }
+
+        // --- MODIFIED: Case-insensitive string comparison ---
+        if (a instanceof String && b instanceof String) {
+            return ((String) a).equalsIgnoreCase((String) b);
+        }
+
         return a.equals(b);
     }
 
     private int compare(Object left, Object right) {
-        if (left instanceof Number && right instanceof Number) {
-            return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue());
-        }
-        if (left instanceof String && right instanceof String) {
-            return ((String) left).compareTo((String) right);
-        }
         // Handle nulls: nulls are always "less"
         if (left == null && right == null) return 0;
         if (left == null) return -1;
         if (right == null) return 1;
+
+        if (left instanceof Number && right instanceof Number) {
+            return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue());
+        }
+
+        // --- MODIFIED: Case-insensitive string comparison ---
+        if (left instanceof String && right instanceof String) {
+            return ((String) left).compareToIgnoreCase((String) right);
+        }
 
         throw new EvaluationException("Cannot compare " + left.getClass().getSimpleName() + " with " + right.getClass().getSimpleName());
     }
@@ -109,6 +118,11 @@ public class Evaluator implements Expression.Visitor<Object> {
         if (!(left instanceof String) || !(right instanceof String)) {
             throw new EvaluationException("String operation (contains, startsWith, endsWith) can only be used on strings.");
         }
-        return op.test((String) left, (String) right);
+
+        // --- MODIFIED: Case-insensitive operations ---
+        String leftStr = ((String) left).toLowerCase();
+        String rightStr = ((String) right).toLowerCase();
+
+        return op.test(leftStr, rightStr);
     }
 }
