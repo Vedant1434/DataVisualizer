@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload CSV</title>
+    <style>
+        body { font-family: sans-serif; display: grid; place-items: center; min-height: 80vh; background-color: #f4f4f4; }
+        .container { background: #fff; border: 1px solid #ccc; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .error { color: red; background-color: #fee; border: 1px solid red; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
+        input[type="file"] { margin-bottom: 1rem; }
+        button { padding: 0.5rem 1rem; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Upload CSV File</h2>
+    <div th:if="${error}" class="error" th:text="${error}"></div>
+    <form th:action="@{/upload}" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".csv" required>
+        <br/>
+        <button type="submit">Upload and View Data</button>
+    </form>
+</div>
+</body>
+</html>
