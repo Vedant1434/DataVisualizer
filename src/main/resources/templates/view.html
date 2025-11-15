@@ -97,6 +97,24 @@
         }
         tbody tr:hover { background-color: #f8f9fa; }
 
+        /* --- NEW STYLES for Sorting --- */
+        th.sortable a {
+            text-decoration: none;
+            color: var(--color-text);
+            display: block;
+        }
+        th.sortable a:hover {
+            color: var(--color-primary);
+        }
+        th.sortable a.sorted-asc::after {
+            content: ' ↓';
+            font-weight: bold;
+        }
+        th.sortable a.sorted-desc::after {
+            content: ' ↑';
+            font-weight: bold;
+        }
+
         /* Pagination */
         .pagination {
             padding: 1rem;
@@ -184,7 +202,11 @@
 <body>
 
 <aside class="sidebar">
+    <!-- ADDED hidden inputs to preserve sort state when filtering -->
     <form th:action="@{/view}" method="get">
+        <input type="hidden" name="sort" th:value="${currentSort}" />
+        <input type="hidden" name="dir" th:value="${currentDir}" />
+
         <div class="sidebar-header">
             <h2>Filter Data</h2>
         </div>
@@ -235,7 +257,18 @@
         <table>
             <thead>
             <tr>
-                <th th:each="header : ${selectedHeaders}" th:text="${header}"></th>
+                <!-- ****** MODIFIED TABLE HEADERS FOR SORTING ****** -->
+                <th th:each="header : ${selectedHeaders}" class="sortable">
+                    <a th:href="@{/view(
+                            filter=${currentFilter},
+                            cols=${selectedHeaders},
+                            sort=${header},
+                            dir=(${header} == ${currentSort} AND ${currentDir} == 'ASC' ? 'DESC' : 'ASC')
+                        )}"
+                       th:classappend="(${header} == ${currentSort} ? (${currentDir} == 'ASC' ? 'sorted-asc' : 'sorted-desc') : '')"
+                       th:text="${header}">
+                    </a>
+                </th>
             </tr>
             </thead>
             <tbody>
@@ -251,19 +284,20 @@
         </table>
     </div>
 
+    <!-- ****** MODIFIED PAGINATION to include sort params ****** -->
     <div th:if="${page.totalPages > 1}" class="pagination">
         <div class="pagination-info">
             Rows per page: <strong th:text="${page.size}"></strong>
         </div>
         <div class="pagination-nav">
                 <span th:if="${page.hasPrevious()}">
-                    <a th:href="@{/view(filter=${currentFilter}, page=${page.number - 1}, size=${page.size}, cols=${selectedHeaders})}">Previous</a>
+                    <a th:href="@{/view(filter=${currentFilter}, page=${page.number - 1}, size=${page.size}, cols=${selectedHeaders}, sort=${currentSort}, dir=${currentDir})}">Previous</a>
                 </span>
 
             <strong><span th:text="${page.number + 1}"></span> / <span th:text="${page.totalPages}"></span></strong>
 
             <span th:if="${page.hasNext()}">
-                    <a th:href="@{/view(filter=${currentFilter}, page=${page.number + 1}, size=${page.size}, cols=${selectedHeaders})}">Next</a>
+                    <a th:href="@{/view(filter=${currentFilter}, page=${page.number + 1}, size=${page.size}, cols=${selectedHeaders}, sort=${currentSort}, dir=${currentDir})}">Next</a>
                 </span>
         </div>
     </div>

@@ -4,18 +4,19 @@ import com.example.csvfilter.model.UserSessionData;
 import com.example.csvfilter.parser.exception.FilterException;
 import com.example.csvfilter.service.DataService;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort; // <-- IMPORT
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.bind.support.SessionStatus;
-import jakarta.servlet.http.HttpSession;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.IOException;
 import java.util.List;
@@ -34,9 +35,7 @@ public class CsvController {
 
     @GetMapping("/")
     public String index() {
-        // Check if session data exists and is valid
         if (userSessionData.hasData()) {
-            // Verify data integrity - if headers or schema are null, clear the data
             if (userSessionData.getHeaders() == null || userSessionData.getSchema() == null) {
                 userSessionData.clearData();
                 return "index";
@@ -61,19 +60,21 @@ public class CsvController {
         return "redirect:/view";
     }
 
+    // --- METHOD MODIFIED to handle Sort ---
     @GetMapping("/view")
     public String viewData(
             @RequestParam(required = false, defaultValue = "") String filter,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) List<String> cols,
+            @RequestParam(required = false, defaultValue = "") String sort, // <-- NEW
+            @RequestParam(required = false, defaultValue = "ASC") String dir, // <-- NEW
             Model model) {
 
         if (!userSessionData.hasData()) {
             return "redirect:/";
         }
 
-        // Additional safety check for data integrity
         List<String> allHeaders = userSessionData.getHeaders();
         if (allHeaders == null || userSessionData.getSchema() == null) {
             userSessionData.clearData();
@@ -88,8 +89,19 @@ public class CsvController {
         model.addAttribute("selectedHeaders", selectedHeaders);
         model.addAttribute("currentFilter", filter);
 
+        // --- NEW SORTING LOGIC ---
+        Sort sortOrder = Sort.unsorted();
+        if (sort != null && !sort.isBlank() && allHeaders.contains(sort)) {
+            sortOrder = Sort.by(Sort.Direction.fromString(dir), sort);
+        }
+
+        model.addAttribute("currentSort", sort);
+        model.addAttribute("currentDir", dir);
+        // --- END NEW SORTING LOGIC ---
+
         try {
-            Pageable pageable = PageRequest.of(page, size);
+            // Pageable now includes the sort order
+            Pageable pageable = PageRequest.of(page, size, sortOrder);
             Page<Map<String, Object>> paginatedData = dataService.getFilteredPaginatedData(filter, pageable);
             model.addAttribute("page", paginatedData);
         } catch (FilterException e) {
@@ -123,14 +135,11 @@ public class CsvController {
 
     @GetMapping("/new")
     public String startNew(SessionStatus sessionStatus, HttpSession session) {
-        // Explicitly clear the session data
         userSessionData.clearData();
-        // Mark the session as complete, which clears all session-scoped beans
         sessionStatus.setComplete();
-        // Invalidate the HTTP session to ensure complete cleanup
         if (session != null) {
             session.invalidate();
         }
-        return "redirect:/?cleared=true"; // Redirect to the root upload page with a flag
+        return "redirect:/?cleared=true";
     }
 }

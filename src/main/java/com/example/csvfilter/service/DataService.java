@@ -13,11 +13,13 @@ import com.example.csvfilter.parser.exception.FilterException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort; // <-- IMPORT
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.io.Writer;
 import java.util.Collections;
+import java.util.Comparator; // <-- IMPORT
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -53,19 +55,84 @@ public class DataService {
         userSessionData.setData(typedRows, headers, schema);
     }
 
+    // --- METHOD MODIFIED to handle Pageable (which includes Sort) ---
     public Page<Map<String, Object>> getFilteredPaginatedData(String filter, Pageable pageable) {
+        // 1. Get filtered data
         List<Map<String, Object>> filteredRows = getFilteredData(filter);
 
-        // Manual pagination
+        // 2. Apply sorting (NEW)
+        List<Map<String, Object>> sortedRows = sortData(filteredRows, pageable.getSort());
+
+        // 3. Manual pagination (applied to sorted rows)
         int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), filteredRows.size());
+        int end = Math.min((start + pageable.getPageSize()), sortedRows.size());
 
-        List<Map<String, Object>> pageContent = (start <= end) ? filteredRows.subList(start, end) : Collections.emptyList();
+        List<Map<String, Object>> pageContent = (start <= end) ? sortedRows.subList(start, end) : Collections.emptyList();
 
-        return new PageImpl<>(pageContent, pageable, filteredRows.size());
+        return new PageImpl<>(pageContent, pageable, sortedRows.size());
     }
 
+    // --- NEW METHOD for Sorting ---
+    private List<Map<String, Object>> sortData(List<Map<String, Object>> data, Sort sort) {
+        if (sort.isUnsorted()) {
+            return data;
+        }
+
+        // We only support sorting by one column for this MVP
+        Sort.Order order = sort.iterator().next();
+        String property = order.getProperty();
+        Comparator<Map<String, Object>> comparator = new RowComparator(property, order.getDirection());
+
+        // We need to stream and collect to a new list to perform the sort
+        return data.stream().sorted(comparator).collect(Collectors.toList());
+    }
+
+    // --- NEW Inner Class for Comparison ---
+    private static class RowComparator implements Comparator<Map<String, Object>> {
+        private final String sortKey;
+        private final Sort.Direction direction;
+
+        public RowComparator(String sortKey, Sort.Direction direction) {
+            this.sortKey = sortKey;
+            this.direction = direction;
+        }
+
+        @Override
+        public int compare(Map<String, Object> row1, Map<String, Object> row2) {
+            Object val1 = row1.get(sortKey);
+            Object val2 = row2.get(sortKey);
+
+            // Treat nulls as "less" than non-nulls
+            if (val1 == null && val2 == null) return 0;
+            if (val1 == null) return (direction == Sort.Direction.ASC) ? -1 : 1;
+            if (val2 == null) return (direction == Sort.Direction.ASC) ? 1 : -1;
+
+            int cmp;
+            if (val1 instanceof Comparable && val2 instanceof Comparable) {
+                // This works for String, Long, Double
+                // We rely on our TypeInferrer to have made them comparable
+                try {
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    Comparable c1 = (Comparable) val1;
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    Comparable c2 = (Comparable) val2;
+                    cmp = c1.compareTo(c2);
+                } catch (ClassCastException e) {
+                    // Fallback to string comparison if types are mixed (e.g., Long vs Double)
+                    cmp = val1.toString().compareTo(val2.toString());
+                }
+            } else {
+                // Fallback for non-comparable types
+                cmp = val1.toString().compareTo(val2.toString());
+            }
+
+            return (direction == Sort.Direction.ASC) ? cmp : -cmp;
+        }
+    }
+
+
     public void exportFilteredData(String filter, Writer writer) {
+        // Note: Export does NOT use sorting from the UI. This is usually desired.
         List<Map<String, Object>> filteredRows = getFilteredData(filter);
         csvExporter.export(userSessionData.getHeaders(), filteredRows, writer);
     }
@@ -90,8 +157,6 @@ public class DataService {
                     try {
                         return evaluator.evaluate(ast, row);
                     } catch (FilterException e) {
-                        // This catches row-level evaluation errors
-                        // For this app, we'll treat row-level errors as "false"
                         return false;
                     }
                 })
